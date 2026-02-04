@@ -1,0 +1,8 @@
+{
+  "name": "Meus exames - Gestão de Exames Laboratoriais",
+  "description": "Uma plataforma completa para acompanhamento evolutivo de exames de laboratório, com integração inteligente para consulta de referências SIGTAP e análise gráfica de resultados.",
+  "requestFramePermissions": [
+    "camera",
+    "geolocation"
+  ]
+}
