@@ -1,5 +1,5 @@
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Appointment, Doctor, Laboratory } from '../types';
 import { 
   CalendarCheck, 
@@ -13,12 +13,16 @@ import {
   Landmark, 
   AlertCircle,
   Bell,
+  BellRing,
   ChevronRight,
   Filter,
   User as UserIcon,
   Navigation,
   ExternalLink,
-  Map as MapIcon
+  Map as MapIcon,
+  Volume2,
+  VolumeX,
+  Calendar as CalendarIcon
 } from 'lucide-react';
 
 interface AgendaProps {
@@ -32,6 +36,11 @@ const Agenda: React.FC<AgendaProps> = ({ appointments, setAppointments, doctors,
   const [showAddModal, setShowAddModal] = useState(false);
   const [filterType, setFilterType] = useState<'ALL' | 'CONSULTA' | 'EXAME'>('ALL');
   const [activeNavMenu, setActiveNavMenu] = useState<string | null>(null);
+  const [isSoundEnabled, setIsSoundEnabled] = useState(true);
+  const [lastNotifiedId, setLastNotifiedId] = useState<string | null>(null);
+  
+  const audioContextRef = useRef<AudioContext | null>(null);
+
   const [newApp, setNewApp] = useState<Partial<Appointment>>({
     title: '',
     type: 'CONSULTA',
@@ -42,6 +51,54 @@ const Agenda: React.FC<AgendaProps> = ({ appointments, setAppointments, doctors,
     notes: '',
     notified: false
   });
+
+  // Função para tocar o alarme (Beep profissional de saúde)
+  const playAlarmSound = () => {
+    if (!isSoundEnabled) return;
+    try {
+      if (!audioContextRef.current) {
+        audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
+      }
+      const ctx = audioContextRef.current;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(880, ctx.currentTime); // Nota A5
+      osc.frequency.exponentialRampToValueAtTime(440, ctx.currentTime + 0.5);
+      
+      gain.gain.setValueAtTime(0, ctx.currentTime);
+      gain.gain.linearRampToValueAtTime(0.2, ctx.currentTime + 0.1);
+      gain.gain.linearRampToValueAtTime(0, ctx.currentTime + 0.8);
+      
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      
+      osc.start();
+      osc.stop(ctx.currentTime + 0.8);
+    } catch (e) {
+      console.error("Erro ao reproduzir som:", e);
+    }
+  };
+
+  // Monitor de Alarme em tempo real
+  useEffect(() => {
+    const timer = setInterval(() => {
+      const now = new Date();
+      const currentDay = now.toISOString().split('T')[0];
+      const currentTime = now.toTimeString().slice(0, 5);
+
+      appointments.forEach(app => {
+        if (app.date === currentDay && app.time === currentTime && lastNotifiedId !== app.id) {
+          playAlarmSound();
+          setLastNotifiedId(app.id);
+          // Opcional: mostrar notificação nativa se permitido
+        }
+      });
+    }, 10000); // Checa a cada 10 segundos
+
+    return () => clearInterval(timer);
+  }, [appointments, lastNotifiedId, isSoundEnabled]);
 
   const sortedAppointments = useMemo(() => {
     return [...appointments]
@@ -91,6 +148,29 @@ const Agenda: React.FC<AgendaProps> = ({ appointments, setAppointments, doctors,
     return date === new Date().toISOString().split('T')[0];
   };
 
+  const isHappeningNow = (date: string, time: string) => {
+    const now = new Date();
+    const currentDay = now.toISOString().split('T')[0];
+    const currentTime = now.toTimeString().slice(0, 5);
+    return date === currentDay && time === currentTime;
+  };
+
+  const addToGoogleCalendar = (app: Appointment) => {
+    const startDateTime = new Date(`${app.date}T${app.time}:00`);
+    const endDateTime = new Date(startDateTime.getTime() + 60 * 60 * 1000); // 1 hora de duração
+    
+    const fmt = (d: Date) => d.toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
+    
+    const title = encodeURIComponent(`[SAÚDE] ${app.title}`);
+    const details = encodeURIComponent(`${app.notes}\n\nLocal: ${app.location}\nGerado por LifeTrace`);
+    const location = encodeURIComponent(app.address || app.location);
+    const dates = `${fmt(startDateTime)}/${fmt(endDateTime)}`;
+    
+    const url = `https://www.google.com/calendar/render?action=TEMPLATE&text=${title}&dates=${dates}&details=${details}&location=${location}&sf=true&output=xml`;
+    
+    window.open(url, '_blank');
+  };
+
   const openNavigation = (address: string, provider: 'google' | 'waze') => {
     const encodedAddress = encodeURIComponent(address);
     let url = '';
@@ -111,6 +191,14 @@ const Agenda: React.FC<AgendaProps> = ({ appointments, setAppointments, doctors,
           <p className="text-slate-500">Agende suas consultas e exames pontuais</p>
         </div>
         <div className="flex items-center gap-3">
+          <button 
+            onClick={() => setIsSoundEnabled(!isSoundEnabled)}
+            className={`p-3 rounded-xl border transition-all flex items-center gap-2 text-[10px] font-black uppercase ${isSoundEnabled ? 'bg-blue-50 text-blue-600 border-blue-100' : 'bg-slate-100 text-slate-400 border-slate-200'}`}
+            title={isSoundEnabled ? "Desativar Alarmes" : "Ativar Alarmes"}
+          >
+            {isSoundEnabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
+            <span className="hidden sm:inline">{isSoundEnabled ? "Alarmes ON" : "Alarmes OFF"}</span>
+          </button>
           <div className="bg-white px-3 py-2 rounded-xl shadow-sm border border-slate-100 flex items-center gap-2">
             <Filter className="w-4 h-4 text-slate-400" />
             <select 
@@ -143,10 +231,12 @@ const Agenda: React.FC<AgendaProps> = ({ appointments, setAppointments, doctors,
           ) : (
             sortedAppointments.map(app => {
               const activeAlarme = isToday(app.date);
+              const happeningNow = isHappeningNow(app.date, app.time);
+              
               return (
-                <div key={app.id} className={`bg-white p-6 rounded-[32px] border transition-all flex flex-col sm:flex-row items-center justify-between gap-6 hover:shadow-md ${activeAlarme ? 'border-amber-200 shadow-amber-50 ring-2 ring-amber-100' : 'border-slate-100'}`}>
+                <div key={app.id} className={`bg-white p-6 rounded-[32px] border transition-all flex flex-col sm:flex-row items-center justify-between gap-6 hover:shadow-md ${happeningNow ? 'border-amber-400 bg-amber-50 ring-4 ring-amber-100' : activeAlarme ? 'border-blue-200' : 'border-slate-100'}`}>
                    <div className="flex items-center gap-5 w-full sm:w-auto">
-                      <div className={`w-16 h-16 rounded-2xl flex flex-col items-center justify-center ${activeAlarme ? 'bg-amber-100 text-amber-600 animate-pulse' : 'bg-slate-50 text-slate-400'}`}>
+                      <div className={`w-16 h-16 rounded-2xl flex flex-col items-center justify-center transition-colors ${happeningNow ? 'bg-amber-500 text-white animate-bounce' : activeAlarme ? 'bg-blue-100 text-blue-600' : 'bg-slate-50 text-slate-400'}`}>
                          <span className="text-[10px] font-black uppercase tracking-tighter">{new Date(app.date).toLocaleDateString('pt-BR', { month: 'short' })}</span>
                          <span className="text-xl font-black leading-none">{new Date(app.date).getUTCDate()}</span>
                       </div>
@@ -155,9 +245,9 @@ const Agenda: React.FC<AgendaProps> = ({ appointments, setAppointments, doctors,
                             <span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-widest ${app.type === 'CONSULTA' ? 'bg-indigo-50 text-indigo-600' : 'bg-blue-50 text-blue-600'}`}>
                                {app.type}
                             </span>
-                            {activeAlarme && (
-                              <span className="bg-amber-500 text-white px-2 py-0.5 rounded-full text-[9px] font-black flex items-center gap-1 animate-bounce">
-                                <Bell className="w-3 h-3" /> AGORA
+                            {happeningNow && (
+                              <span className="bg-rose-500 text-white px-2 py-0.5 rounded-full text-[9px] font-black flex items-center gap-1 animate-pulse">
+                                <BellRing className="w-3 h-3" /> AGORA
                               </span>
                             )}
                          </div>
@@ -167,24 +257,29 @@ const Agenda: React.FC<AgendaProps> = ({ appointments, setAppointments, doctors,
                                <span className="flex items-center gap-1"><Clock className="w-3.5 h-3.5" /> {app.time}</span>
                                <span className="flex items-center gap-1 truncate max-w-[200px]"><UserIcon className="w-3.5 h-3.5" /> {app.location}</span>
                             </div>
-                            {app.address && (
-                              <div className="flex items-center gap-1 text-[10px] text-blue-500 font-bold uppercase tracking-tight">
-                                <MapPin className="w-3 h-3" /> {app.address}
-                              </div>
-                            )}
                          </div>
                       </div>
                    </div>
-                   <div className="flex items-center gap-3 w-full sm:w-auto border-t sm:border-t-0 pt-4 sm:pt-0 justify-end relative">
+                   
+                   <div className="flex items-center gap-2 w-full sm:w-auto border-t sm:border-t-0 pt-4 sm:pt-0 justify-end">
+                      <button 
+                        onClick={() => addToGoogleCalendar(app)}
+                        className="bg-white border border-slate-200 text-slate-600 p-3 rounded-xl hover:bg-slate-50 transition-all flex items-center gap-2 text-[9px] font-black uppercase tracking-widest shadow-sm"
+                        title="Adicionar ao Google Agenda"
+                      >
+                        <CalendarIcon className="w-4 h-4 text-blue-600" />
+                        <span className="hidden xl:inline">Google Agenda</span>
+                      </button>
+
                       {app.address && (
                         <div className="relative">
                           <button 
                             onClick={() => setActiveNavMenu(activeNavMenu === app.id ? null : app.id)}
-                            className="bg-blue-50 text-blue-600 p-3 rounded-xl hover:bg-blue-100 transition-all flex items-center gap-2 text-[10px] font-black uppercase tracking-widest"
+                            className="bg-blue-50 text-blue-600 p-3 rounded-xl hover:bg-blue-100 transition-all flex items-center gap-2 text-[9px] font-black uppercase tracking-widest shadow-sm"
                             title="Como chegar"
                           >
                             <Navigation className="w-4 h-4" />
-                            <span className="hidden sm:inline">Navegar</span>
+                            <span className="hidden xl:inline">Navegar</span>
                           </button>
                           
                           {activeNavMenu === app.id && (
@@ -220,16 +315,35 @@ const Agenda: React.FC<AgendaProps> = ({ appointments, setAppointments, doctors,
         </div>
 
         <div className="space-y-6">
+           <div className="bg-slate-900 p-8 rounded-[40px] text-white shadow-xl relative overflow-hidden">
+              <div className="absolute -right-4 -top-4 p-6 opacity-10">
+                 <Bell className="w-32 h-32 rotate-12" />
+              </div>
+              <h3 className="text-xl font-black mb-4 uppercase tracking-tight flex items-center gap-2">
+                <BellRing className="w-6 h-6 text-blue-400" />
+                Alarmes Ativos
+              </h3>
+              <p className="text-slate-400 text-xs leading-relaxed mb-6">
+                O aplicativo emitirá um alerta sonoro no exato momento marcado para seu compromisso. Certifique-se de que o volume está ativado.
+              </p>
+              <button 
+                onClick={playAlarmSound}
+                className="w-full py-3 bg-white/10 hover:bg-white/20 border border-white/10 rounded-2xl text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2 transition-all"
+              >
+                <Volume2 className="w-4 h-4" /> Testar Alarme
+              </button>
+           </div>
+
            <div className="bg-blue-600 p-8 rounded-[40px] text-white shadow-xl relative overflow-hidden">
               <div className="absolute top-0 right-0 p-6 opacity-20">
                  <CalendarCheck className="w-20 h-20" />
               </div>
-              <h3 className="text-xl font-black mb-4 uppercase">Alerta de Agenda</h3>
+              <h3 className="text-xl font-black mb-4 uppercase">Agenda Inteligente</h3>
               <p className="text-blue-100 text-sm leading-relaxed mb-6">
-                Mantenha seus compromissos atualizados. Ao selecionar um médico ou laboratório cadastrado, o endereço será preenchido automaticamente!
+                Sincronize com o Google Agenda para receber notificações push no seu celular e smartwatch!
               </p>
               <div className="bg-white/10 p-4 rounded-2xl border border-white/20">
-                 <p className="text-[10px] font-black uppercase tracking-widest mb-1 text-blue-200">Total agendado</p>
+                 <p className="text-[10px] font-black uppercase tracking-widest mb-1 text-blue-200">Compromissos</p>
                  <p className="text-3xl font-black">{appointments.length}</p>
               </div>
            </div>
