@@ -51,6 +51,11 @@ const Register: React.FC<RegisterProps> = ({ onRegister, onBack }) => {
       setError('As senhas digitadas não são iguais. Por favor, corrija para prosseguir.');
       return;
     }
+
+    if (formData.password.length < 4) {
+      setError('A senha deve ter pelo menos 4 caracteres.');
+      return;
+    }
     
     const newUser: User = {
       id: Date.now().toString(),
@@ -59,11 +64,12 @@ const Register: React.FC<RegisterProps> = ({ onRegister, onBack }) => {
       email: formData.email.toLowerCase(),
       preExistingConditions: formData.conditions.toUpperCase(),
       continuousMedications: formData.medications.toUpperCase(),
-      username: formData.username.toUpperCase(),
+      username: formData.username.trim(),
       bloodType: formData.bloodType,
       photoUrl: formData.photoUrl
     };
 
+    // Salva o objeto completo (incluindo password) para o componente Login consultar
     localStorage.setItem('lifeTrace_user_account', JSON.stringify({ ...newUser, password: formData.password }));
     onRegister(newUser);
   };
@@ -172,9 +178,10 @@ const Register: React.FC<RegisterProps> = ({ onRegister, onBack }) => {
                 <input
                   type="text"
                   required
-                  className="w-full p-3 bg-white border border-blue-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-400 font-bold uppercase"
+                  className="w-full p-3 bg-white border border-blue-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-400 font-bold"
                   value={formData.username}
-                  onChange={(e) => handleInputChange('username', e.target.value, true)}
+                  onChange={(e) => handleInputChange('username', e.target.value)}
+                  placeholder="EX: joaosilva"
                 />
               </div>
             </div>

@@ -1,6 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { AppScreen, User, ExamRecord, Doctor, Laboratory, Appointment, ImagingExam } from './types';
+import { loadData, saveData } from './services/storageService';
 import Login from './components/Login';
 import Register from './components/Register';
 import ForgotPassword from './components/ForgotPassword';
@@ -14,7 +15,7 @@ import Reports from './components/Reports';
 import Analytics from './components/Analytics';
 import Profile from './components/Profile';
 import Agenda from './components/Agenda';
-import { Microscope, Menu, X, User as UserIcon, AlertTriangle } from 'lucide-react';
+import { Microscope, Menu, X, User as UserIcon, Loader2 } from 'lucide-react';
 
 const App: React.FC = () => {
   const [currentScreen, setCurrentScreen] = useState<AppScreen>(AppScreen.LOGIN);
@@ -25,44 +26,53 @@ const App: React.FC = () => {
   const [laboratories, setLaboratories] = useState<Laboratory[]>([]);
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const [storageError, setStorageError] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
 
+  // Carregamento inicial via IndexedDB (Sem limites de 5MB)
   useEffect(() => {
-    const savedUser = localStorage.getItem('lifeTrace_user');
-    const savedExams = localStorage.getItem('lifeTrace_exams');
-    const savedImaging = localStorage.getItem('lifeTrace_imagingExams');
-    const savedDoctors = localStorage.getItem('lifeTrace_doctors');
-    const savedLabs = localStorage.getItem('lifeTrace_laboratories');
-    const savedAppointments = localStorage.getItem('lifeTrace_appointments');
+    const initApp = async () => {
+      try {
+        const [u, e, i, d, l, a] = await Promise.all([
+          loadData('user'),
+          loadData('exams'),
+          loadData('imagingExams'),
+          loadData('doctors'),
+          loadData('laboratories'),
+          loadData('appointments')
+        ]);
 
-    if (savedUser) {
-        setCurrentUser(JSON.parse(savedUser));
-        setCurrentScreen(AppScreen.DASHBOARD);
-    }
-    if (savedExams) setExams(JSON.parse(savedExams));
-    if (savedImaging) setImagingExams(JSON.parse(savedImaging));
-    if (savedDoctors) setDoctors(JSON.parse(savedDoctors));
-    if (savedLabs) setLaboratories(JSON.parse(savedLabs));
-    if (savedAppointments) setAppointments(JSON.parse(savedAppointments));
+        if (u) {
+          setCurrentUser(u);
+          setCurrentScreen(AppScreen.DASHBOARD);
+        }
+        if (e) setExams(e);
+        if (i) setImagingExams(i);
+        if (d) setDoctors(d);
+        if (l) setLaboratories(l);
+        if (a) setAppointments(a);
+      } catch (err) {
+        console.error("Erro ao carregar banco de dados:", err);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    initApp();
   }, []);
 
-  // Persistência com tratamento de erro de cota (Arquivos grandes)
+  // Persistência automática em background via IndexedDB
   useEffect(() => {
-    try {
-      localStorage.setItem('lifeTrace_exams', JSON.stringify(exams));
-      localStorage.setItem('lifeTrace_imagingExams', JSON.stringify(imagingExams));
-      localStorage.setItem('lifeTrace_doctors', JSON.stringify(doctors));
-      localStorage.setItem('lifeTrace_laboratories', JSON.stringify(laboratories));
-      localStorage.setItem('lifeTrace_appointments', JSON.stringify(appointments));
-      setStorageError(false);
-    } catch (e) {
-      console.error("Erro de armazenamento:", e);
-      setStorageError(true);
+    if (!isLoading) {
+      saveData('exams', exams);
+      saveData('imagingExams', imagingExams);
+      saveData('doctors', doctors);
+      saveData('laboratories', laboratories);
+      saveData('appointments', appointments);
+      if (currentUser) saveData('user', currentUser);
     }
-  }, [exams, imagingExams, doctors, laboratories, appointments]);
+  }, [exams, imagingExams, doctors, laboratories, appointments, currentUser, isLoading]);
 
   const handleLogout = () => {
-    localStorage.removeItem('lifeTrace_user');
+    saveData('user', null);
     setCurrentUser(null);
     setCurrentScreen(AppScreen.LOGIN);
     setIsMobileMenuOpen(false);
@@ -70,9 +80,18 @@ const App: React.FC = () => {
 
   const handleLogin = (user: User) => {
     setCurrentUser(user);
-    localStorage.setItem('lifeTrace_user', JSON.stringify(user));
+    saveData('user', user);
     setCurrentScreen(AppScreen.DASHBOARD);
   };
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center gap-4">
+        <Loader2 className="w-12 h-12 text-blue-600 animate-spin" />
+        <p className="font-black text-blue-600 uppercase tracking-widest text-xs">Iniciando Banco de Dados...</p>
+      </div>
+    );
+  }
 
   if (!currentUser) {
     switch (currentScreen) {
@@ -101,13 +120,6 @@ const App: React.FC = () => {
 
   return (
     <div className="flex flex-col min-h-screen bg-slate-50">
-      {storageError && (
-        <div className="bg-rose-600 text-white px-4 py-2 flex items-center justify-center gap-2 text-xs font-bold uppercase tracking-widest z-50 print:hidden">
-          <AlertTriangle className="w-4 h-4" />
-          Erro: Limite de memória atingido. Remova arquivos grandes para salvar novos dados.
-        </div>
-      )}
-      
       <header className="bg-blue-600 text-white shadow-lg z-30 sticky top-0 print:hidden">
         <div className="px-4 py-3 md:px-8 flex items-center justify-between">
           <div className="flex items-center gap-3">

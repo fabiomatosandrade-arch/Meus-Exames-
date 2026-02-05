@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
 import { User } from '../types';
-import { Eye, EyeOff, Lock, User as UserIcon, Microscope } from 'lucide-react';
+import { Eye, EyeOff, Lock, User as UserIcon, Microscope, AlertCircle } from 'lucide-react';
 
 interface LoginProps {
   onLogin: (user: User) => void;
@@ -13,29 +13,36 @@ const Login: React.FC<LoginProps> = ({ onLogin, onRegister, onForgot }) => {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [error, setError] = useState('');
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    const savedAccount = localStorage.getItem('lifeTrace_user_account');
+    setError('');
+
+    const savedAccountStr = localStorage.getItem('lifeTrace_user_account');
     
-    if (savedAccount) {
-        const account = JSON.parse(savedAccount);
-        if (account.username.toUpperCase() === username.toUpperCase()) {
-            onLogin(account);
-            return;
-        }
+    if (!savedAccountStr) {
+      setError('Nenhum usuário cadastrado neste dispositivo. Por favor, crie uma conta.');
+      return;
     }
-    
-    // Fallback para login simples/demo
-    onLogin({
-      id: '1',
-      name: username.toUpperCase() || 'USUÁRIO',
-      email: `${username.toLowerCase() || 'usuario'}@saude.com`,
-      birthDate: '1990-01-01',
-      preExistingConditions: 'NÃO INFORMADA',
-      bloodType: '--',
-      username: username || 'admin'
-    });
+
+    try {
+      const account = JSON.parse(savedAccountStr);
+      
+      const inputUser = username.trim().toUpperCase();
+      const storedUser = account.username.trim().toUpperCase();
+      
+      if (inputUser === storedUser && password === account.password) {
+        // Remove a senha do objeto antes de passar para o estado global por segurança
+        const { password: _, ...userWithoutPassword } = account;
+        onLogin(userWithoutPassword as User);
+      } else {
+        setError('Usuário ou senha inválidos. Verifique suas credenciais.');
+      }
+    } catch (err) {
+      console.error("Erro ao validar login:", err);
+      setError('Ocorreu um erro ao processar o login. Tente novamente.');
+    }
   };
 
   return (
@@ -46,8 +53,15 @@ const Login: React.FC<LoginProps> = ({ onLogin, onRegister, onForgot }) => {
             <Microscope className="w-12 h-12" />
           </div>
           <h2 className="text-3xl font-black text-slate-800 tracking-tight uppercase">Entrar</h2>
-          <p className="text-slate-400 mt-2 font-black uppercase tracking-widest text-[10px]">Acesse seu histórico de saúde</p>
+          <p className="text-slate-400 mt-2 font-black uppercase tracking-widest text-[10px]">Acesso Restrito a Usuários Cadastrados</p>
         </div>
+
+        {error && (
+          <div className="mb-8 p-4 bg-rose-50 border-2 border-rose-100 rounded-2xl flex items-center gap-3 animate-in fade-in slide-in-from-top-2 duration-300">
+            <AlertCircle className="w-5 h-5 text-rose-500 shrink-0" />
+            <p className="text-[10px] font-black text-rose-600 uppercase tracking-tight leading-tight">{error}</p>
+          </div>
+        )}
 
         <form onSubmit={handleSubmit} className="space-y-8">
           <div className="space-y-2">
@@ -60,7 +74,7 @@ const Login: React.FC<LoginProps> = ({ onLogin, onRegister, onForgot }) => {
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
                 className="w-full pl-12 pr-4 py-5 bg-slate-50 border border-slate-200 rounded-3xl focus:ring-4 focus:ring-blue-100 focus:border-blue-500 transition-all outline-none font-bold uppercase text-xs"
-                placeholder="NOME DE USUÁRIO"
+                placeholder="SEU NOME DE USUÁRIO"
               />
             </div>
           </div>

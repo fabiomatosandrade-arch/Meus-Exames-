@@ -26,7 +26,7 @@ export const getHealthStatus = (valueStr: string, referenceRange: string): Healt
       const min = parseFloat(rangeMatch[1]);
       const max = parseFloat(rangeMatch[2]);
       const rangeWidth = max - min || 1; 
-      const margin = rangeWidth * 0.2; // EXATAMENTE 20% de margem
+      const margin = rangeWidth * 0.2; // EXATAMENTE 20% da amplitude
       
       if (val >= min && val <= max) return 'success';
       
@@ -89,7 +89,6 @@ const Exams: React.FC<ExamsProps> = ({ exams, setExams, doctors, setDoctors, lab
   const [showAddModal, setShowAddModal] = useState(false);
   const [viewingExamRecord, setViewingExamRecord] = useState<ExamRecord | null>(null);
   const [isEditingRecord, setIsEditingRecord] = useState(false);
-  const [editFormData, setEditFormData] = useState<Partial<ExamRecord>>({});
   
   const [searchQuery, setSearchQuery] = useState('');
   const [examNameFilter, setExamNameFilter] = useState('all');
@@ -99,7 +98,6 @@ const Exams: React.FC<ExamsProps> = ({ exams, setExams, doctors, setDoctors, lab
   const [endDateFilter, setEndDateFilter] = useState('');
   const [viewMode, setViewMode] = useState<'grid' | 'timeline'>('grid');
   const [sigtapResults, setSigtapResults] = useState<ExamReference[]>([]);
-  const [isLoadingSigtap, setIsLoadingSigtap] = useState(false);
   const [isAnalyzingFile, setIsAnalyzingFile] = useState(false);
   
   const [examImages, setExamImages] = useState<Record<string, string>>(() => {
@@ -176,16 +174,8 @@ const Exams: React.FC<ExamsProps> = ({ exams, setExams, doctors, setDoctors, lab
     return result.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   }, [exams, examNameFilter, labFilter, statusFilter, startDateFilter, endDateFilter]);
 
-  const handleResetFilters = () => {
-    setExamNameFilter('all');
-    setLabFilter('all');
-    setStatusFilter('all');
-    setStartDateFilter('');
-    setEndDateFilter('');
-  };
-
   const handleDeleteExam = (id: string) => {
-    if (window.confirm('Deseja excluir este registro de exame permanentemente?')) {
+    if (window.confirm('Deseja excluir este registro permanentemente?')) {
       setExams(prev => prev.filter(e => e.id !== id));
       setViewingExamRecord(null);
     }
@@ -247,11 +237,6 @@ const Exams: React.FC<ExamsProps> = ({ exams, setExams, doctors, setDoctors, lab
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // Alerta sobre tamanho de arquivo (Base64 ocupa 33% mais espaço)
-    if (file.size > 2 * 1024 * 1024) {
-      alert("Arquivo muito grande. Utilize arquivos com menos de 2MB para garantir o salvamento correto.");
-    }
-
     setIsAnalyzingFile(true);
     try {
       const reader = new FileReader();
@@ -287,10 +272,6 @@ const Exams: React.FC<ExamsProps> = ({ exams, setExams, doctors, setDoctors, lab
   };
 
   const handleSaveExtracted = () => {
-    if (!currentFileUri) {
-      if (!confirm("O documento ainda não foi processado completamente. Deseja salvar sem o anexo?")) return;
-    }
-
     const validExams = extractedExams
       .filter(ex => ex.examName && ex.value)
       .map(ex => {
@@ -309,7 +290,7 @@ const Exams: React.FC<ExamsProps> = ({ exams, setExams, doctors, setDoctors, lab
           doctorName: docName,
           date: ex.date || new Date().toISOString().split('T')[0],
           notes: (ex.notes || '').toUpperCase(),
-          fileUri: currentFileUri, // Garante que o arquivo carregado seja vinculado
+          fileUri: currentFileUri,
           fileMimeType: currentFileMime
         } as ExamRecord;
       });
@@ -384,8 +365,6 @@ const Exams: React.FC<ExamsProps> = ({ exams, setExams, doctors, setDoctors, lab
     return counts;
   }, [exams]);
 
-  const isFilterActive = examNameFilter !== 'all' || labFilter !== 'all' || statusFilter !== 'all' || startDateFilter || endDateFilter;
-
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -394,108 +373,51 @@ const Exams: React.FC<ExamsProps> = ({ exams, setExams, doctors, setDoctors, lab
           <p className="text-slate-500">Histórico completo de resultados laboratoriais</p>
         </div>
         <div className="flex flex-col xl:flex-row items-center gap-3">
-          <div className="flex bg-slate-100 p-1.5 rounded-2xl border border-slate-200 w-full sm:w-auto justify-center shadow-inner">
-            <button onClick={() => setViewMode('grid')} title="Ver Grade" className={`p-2.5 rounded-xl transition-all flex items-center gap-2 px-4 ${viewMode === 'grid' ? 'bg-white shadow-md text-blue-600' : 'text-slate-400 hover:text-slate-600'}`}>
+          <div className="flex bg-slate-100 p-1.5 rounded-2xl border border-slate-200 shadow-inner">
+            <button onClick={() => setViewMode('grid')} className={`p-2.5 rounded-xl transition-all px-4 ${viewMode === 'grid' ? 'bg-white shadow-md text-blue-600' : 'text-slate-400'}`}>
               <LayoutGrid className="w-5 h-5" />
             </button>
-            <button onClick={() => setViewMode('timeline')} title="Ver Lista" className={`p-2.5 rounded-xl transition-all flex items-center gap-2 px-4 ${viewMode === 'timeline' ? 'bg-white shadow-md text-blue-600' : 'text-slate-400 hover:text-slate-600'}`}>
+            <button onClick={() => setViewMode('timeline')} className={`p-2.5 rounded-xl transition-all px-4 ${viewMode === 'timeline' ? 'bg-white shadow-md text-blue-600' : 'text-slate-400'}`}>
               <List className="w-5 h-5" />
             </button>
           </div>
-          <button onClick={() => setShowAddModal(true)} className="w-full sm:w-auto flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-black px-8 py-4 rounded-2xl shadow-xl transition-all transform active:scale-95 whitespace-nowrap uppercase tracking-widest text-sm">
+          <button onClick={() => setShowAddModal(true)} className="w-full sm:w-auto flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-black px-8 py-4 rounded-2xl shadow-xl uppercase tracking-widest text-sm">
             <Plus className="w-6 h-6" />Novo Exame
           </button>
         </div>
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-6 gap-4 print:hidden">
-         <button onClick={() => setStatusFilter('all')} className={`p-5 rounded-[32px] border transition-all text-left flex flex-col justify-between h-32 relative overflow-hidden group ${statusFilter === 'all' ? 'bg-slate-800 border-slate-900 text-white shadow-xl ring-4 ring-slate-100 ring-offset-2' : 'bg-white border-slate-100 text-slate-600 hover:border-slate-300 shadow-sm'}`}>
-            <div className="flex items-center justify-between relative z-10">
-              <BarChart className={`w-6 h-6 ${statusFilter === 'all' ? 'text-blue-400' : 'text-slate-400'}`} />
-              <span className="text-3xl font-black tabular-nums">{exams.length}</span>
-            </div>
-            <div className="relative z-10"><span className="text-[11px] font-black uppercase tracking-widest block mb-1">Total</span></div>
+         <button onClick={() => setStatusFilter('all')} className={`p-5 rounded-[32px] border transition-all text-left flex flex-col justify-between h-32 relative overflow-hidden group ${statusFilter === 'all' ? 'bg-slate-800 text-white' : 'bg-white'}`}>
+            <BarChart className="w-6 h-6 mb-2" />
+            <span className="text-3xl font-black">{exams.length}</span>
+            <span className="text-[10px] font-black uppercase tracking-widest">Total</span>
          </button>
-         <button onClick={() => setStatusFilter('success')} className={`p-5 rounded-[32px] border transition-all text-left flex flex-col justify-between h-32 relative overflow-hidden group ${statusFilter === 'success' ? 'bg-emerald-600 border-emerald-700 text-white shadow-xl ring-4 ring-emerald-100 ring-offset-2' : 'bg-white border-slate-100 text-slate-600 hover:border-emerald-200 shadow-sm'}`}>
-            <div className="flex items-center justify-between relative z-10">
-              <CheckCircle2 className={`w-6 h-6 ${statusFilter === 'success' ? 'text-white' : 'text-emerald-500'}`} />
-              <span className="text-3xl font-black tabular-nums">{statsCount.success}</span>
-            </div>
-            <div className="relative z-10"><span className="text-[11px] font-black uppercase tracking-widest block mb-1">Normais</span></div>
+         <button onClick={() => setStatusFilter('success')} className={`p-5 rounded-[32px] border transition-all text-left flex flex-col justify-between h-32 relative overflow-hidden group ${statusFilter === 'success' ? 'bg-emerald-600 text-white' : 'bg-white'}`}>
+            <CheckCircle2 className="w-6 h-6 mb-2" />
+            <span className="text-3xl font-black">{statsCount.success}</span>
+            <span className="text-[10px] font-black uppercase tracking-widest text-emerald-500">Normal</span>
          </button>
-         <button onClick={() => setStatusFilter('warning')} className={`p-5 rounded-[32px] border transition-all text-left flex flex-col justify-between h-32 relative overflow-hidden group ${statusFilter === 'warning' ? 'bg-amber-50 border-amber-600 text-white shadow-xl ring-4 ring-amber-100 ring-offset-2' : 'bg-white border-slate-100 text-slate-600 hover:border-amber-200 shadow-sm'}`}>
-            <div className="flex items-center justify-between relative z-10">
-              <AlertCircle className={`w-6 h-6 ${statusFilter === 'warning' ? 'text-white' : 'text-amber-500'}`} />
-              <span className="text-3xl font-black tabular-nums">{statsCount.warning}</span>
-            </div>
-            <div className="relative z-10"><span className="text-[11px] font-black uppercase tracking-widest block mb-1">Atenção</span></div>
+         <button onClick={() => setStatusFilter('warning')} className={`p-5 rounded-[32px] border transition-all text-left flex flex-col justify-between h-32 relative overflow-hidden group ${statusFilter === 'warning' ? 'bg-amber-500 text-white' : 'bg-white'}`}>
+            <AlertCircle className="w-6 h-6 mb-2" />
+            <span className="text-3xl font-black">{statsCount.warning}</span>
+            <span className="text-[10px] font-black uppercase tracking-widest text-amber-500">Atenção</span>
          </button>
-         <button onClick={() => setStatusFilter('danger')} className={`p-5 rounded-[32px] border transition-all text-left flex flex-col justify-between h-32 relative overflow-hidden group ${statusFilter === 'danger' ? 'bg-rose-600 border-rose-700 text-white shadow-xl ring-4 ring-rose-100 ring-offset-2' : 'bg-white border-slate-100 text-slate-600 hover:border-rose-200 shadow-sm'}`}>
-            <div className="flex items-center justify-between relative z-10">
-              <AlertCircle className={`w-6 h-6 ${statusFilter === 'danger' ? 'text-white' : 'text-rose-500'}`} />
-              <span className="text-3xl font-black tabular-nums">{statsCount.danger}</span>
-            </div>
-            <div className="relative z-10"><span className="text-[11px] font-black uppercase tracking-widest block mb-1">Críticos</span></div>
+         <button onClick={() => setStatusFilter('danger')} className={`p-5 rounded-[32px] border transition-all text-left flex flex-col justify-between h-32 relative overflow-hidden group ${statusFilter === 'danger' ? 'bg-rose-600 text-white' : 'bg-white'}`}>
+            <AlertCircle className="w-6 h-6 mb-2" />
+            <span className="text-3xl font-black">{statsCount.danger}</span>
+            <span className="text-[10px] font-black uppercase tracking-widest text-rose-500">Crítico</span>
          </button>
-         <button onClick={() => setStatusFilter('info')} className={`p-5 rounded-[32px] border transition-all text-left flex flex-col justify-between h-32 relative overflow-hidden group ${statusFilter === 'info' ? 'bg-purple-600 border-purple-700 text-white shadow-xl ring-4 ring-purple-100 ring-offset-2' : 'bg-white border-slate-100 text-slate-600 hover:border-purple-200 shadow-sm'}`}>
-            <div className="flex items-center justify-between relative z-10">
-              <Info className={`w-6 h-6 ${statusFilter === 'info' ? 'text-white' : 'text-purple-500'}`} />
-              <span className="text-3xl font-black tabular-nums">{statsCount.info}</span>
-            </div>
-            <div className="relative z-10"><span className="text-[11px] font-black uppercase tracking-widest block mb-1">Info</span></div>
+         <button onClick={() => setStatusFilter('info')} className={`p-5 rounded-[32px] border transition-all text-left flex flex-col justify-between h-32 relative overflow-hidden group ${statusFilter === 'info' ? 'bg-purple-600 text-white' : 'bg-white'}`}>
+            <Info className="w-6 h-6 mb-2" />
+            <span className="text-3xl font-black">{statsCount.info}</span>
+            <span className="text-[10px] font-black uppercase tracking-widest text-purple-500">Info</span>
          </button>
-         <button onClick={() => setStatusFilter('neutral')} className={`p-5 rounded-[32px] border transition-all text-left flex flex-col justify-between h-32 relative overflow-hidden group ${statusFilter === 'neutral' ? 'bg-slate-400 border-slate-500 text-white shadow-xl ring-4 ring-slate-100 ring-offset-2' : 'bg-white border-slate-100 text-slate-600 hover:border-slate-300 shadow-sm'}`}>
-            <div className="flex items-center justify-between relative z-10">
-              <HelpCircle className={`w-6 h-6 ${statusFilter === 'neutral' ? 'text-white' : 'text-slate-400'}`} />
-              <span className="text-3xl font-black tabular-nums">{statsCount.neutral}</span>
-            </div>
-            <div className="relative z-10"><span className="text-[11px] font-black uppercase tracking-widest block mb-1">N/A</span></div>
+         <button onClick={() => setStatusFilter('neutral')} className={`p-5 rounded-[32px] border transition-all text-left flex flex-col justify-between h-32 relative overflow-hidden group ${statusFilter === 'neutral' ? 'bg-slate-400 text-white' : 'bg-white'}`}>
+            <HelpCircle className="w-6 h-6 mb-2" />
+            <span className="text-3xl font-black">{statsCount.neutral}</span>
+            <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">N/A</span>
          </button>
-      </div>
-
-      <div className="bg-white p-8 rounded-[40px] border border-slate-100 shadow-md space-y-8 print:hidden transition-all">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center"><Filter className="w-5 h-5" /></div>
-            <h3 className="text-sm font-black uppercase tracking-widest text-slate-800">Filtros de Busca</h3>
-          </div>
-          {isFilterActive && (
-             <button onClick={handleResetFilters} className="flex items-center gap-2 px-4 py-2 text-rose-500 font-black text-[10px] uppercase tracking-widest hover:bg-rose-50 rounded-xl transition-all border border-rose-100">
-                <RotateCcw className="w-3.5 h-3.5" /> Limpar Filtros
-             </button>
-          )}
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
-          <div className="space-y-2">
-            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 block">Exame</label>
-            <div className="relative">
-              <select className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl outline-none text-xs font-black text-slate-700 uppercase appearance-none focus:ring-4 focus:ring-blue-100 focus:border-blue-400 transition-all" value={examNameFilter} onChange={(e) => setExamNameFilter(e.target.value)}>
-                <option value="all">TODOS OS EXAMES</option>
-                {uniqueExamNames.map(name => (<option key={name} value={name}>{name}</option>))}
-              </select>
-              <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
-            </div>
-          </div>
-          <div className="space-y-2">
-            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 block">Laboratório</label>
-            <div className="relative">
-              <select className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl outline-none text-xs font-black text-slate-700 uppercase appearance-none focus:ring-4 focus:ring-blue-100 focus:border-blue-400 transition-all" value={labFilter} onChange={(e) => setLabFilter(e.target.value)}>
-                <option value="all">TODOS OS LABORATÓRIOS</option>
-                {allAvailableLabs.map(lab => (<option key={lab} value={lab}>{lab}</option>))}
-              </select>
-              <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
-            </div>
-          </div>
-          <div className="space-y-2">
-            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 block">Data Inicial</label>
-            <input type="date" className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl outline-none focus:ring-4 focus:ring-blue-100 font-bold" value={startDateFilter} onChange={(e) => setStartDateFilter(e.target.value)} />
-          </div>
-          <div className="space-y-2">
-            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 block">Data Final</label>
-            <input type="date" className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl outline-none focus:ring-4 focus:ring-blue-100 font-bold" value={endDateFilter} onChange={(e) => setEndDateFilter(e.target.value)} />
-          </div>
-        </div>
       </div>
 
       <div className={viewMode === 'grid' ? "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8" : "space-y-4"}>
@@ -503,10 +425,10 @@ const Exams: React.FC<ExamsProps> = ({ exams, setExams, doctors, setDoctors, lab
           const status = getHealthStatus(exam.value, exam.referenceRange);
           const examImg = examImages[exam.examName.toUpperCase()];
           return (
-            <div key={exam.id} className="bg-white p-8 rounded-[48px] shadow-sm border border-slate-100 hover:shadow-2xl hover:-translate-y-1 transition-all cursor-pointer group relative overflow-hidden" onClick={() => { setViewingExamRecord(exam); setIsEditingRecord(false); }}>
+            <div key={exam.id} className="bg-white p-8 rounded-[48px] shadow-sm border border-slate-100 hover:shadow-2xl hover:-translate-y-1 transition-all cursor-pointer group relative overflow-hidden" onClick={() => setViewingExamRecord(exam)}>
               <div className={`absolute top-0 left-0 bottom-0 w-2 ${statusColors[status]}`}></div>
               <div className="flex justify-between items-start mb-8 relative z-10 pl-2">
-                 <div className="bg-blue-50 p-0 rounded-3xl text-blue-600 group-hover:shadow-lg transition-all overflow-hidden w-16 h-16 flex items-center justify-center border border-blue-100">
+                 <div className="bg-blue-50 p-0 rounded-3xl text-blue-600 overflow-hidden w-16 h-16 flex items-center justify-center border border-blue-100">
                     {examImg ? <img src={examImg} alt={exam.examName} className="w-full h-full object-cover" /> : <Activity className="w-8 h-8" />}
                  </div>
                  <div className="text-right">
@@ -546,7 +468,7 @@ const Exams: React.FC<ExamsProps> = ({ exams, setExams, doctors, setDoctors, lab
                    <div className="bg-blue-600 text-white p-10 rounded-[40px] shadow-xl relative overflow-hidden">
                       <Sparkles className="absolute right-6 top-6 w-20 h-20 opacity-20" />
                       <h4 className="text-2xl font-black uppercase mb-3 tracking-tighter">Inteligência Artificial Ativa</h4>
-                      <p className="text-blue-100 text-sm font-medium">Extraímos resultados múltiplos. O arquivo original será anexado a todos os registros abaixo.</p>
+                      <p className="text-blue-100 text-sm font-medium">Extraímos resultados múltiplos. O sistema agora usa Banco de Dados IndexedDB para suportar arquivos grandes.</p>
                    </div>
                    <div className="grid grid-cols-1 gap-8">
                       {extractedExams.map((ex, idx) => (
@@ -581,7 +503,7 @@ const Exams: React.FC<ExamsProps> = ({ exams, setExams, doctors, setDoctors, lab
                    </div>
                    <div className="pt-10 border-t border-slate-200 flex justify-end gap-6">
                       <button onClick={() => { setExtractedExams([]); setCurrentFileUri(undefined); }} className="px-10 py-5 font-black text-slate-400 uppercase text-xs hover:text-slate-600 tracking-widest transition-colors">Descartar Tudo</button>
-                      <button onClick={handleSaveExtracted} className="px-12 py-5 bg-emerald-600 text-white font-black rounded-3xl shadow-xl uppercase tracking-widest text-xs hover:bg-emerald-700 transition-all flex items-center gap-2"><CheckCircle2 className="w-5 h-5" /> Salvar e Anexar Documento</button>
+                      <button onClick={handleSaveExtracted} className="px-12 py-5 bg-emerald-600 text-white font-black rounded-3xl shadow-xl uppercase tracking-widest text-xs hover:bg-emerald-700 transition-all flex items-center gap-2"><CheckCircle2 className="w-5 h-5" /> Salvar Tudo com Anexo</button>
                    </div>
                 </div>
               ) : (
@@ -591,7 +513,7 @@ const Exams: React.FC<ExamsProps> = ({ exams, setExams, doctors, setDoctors, lab
                       {isAnalyzingFile ? (
                         <div className="py-16 flex flex-col items-center gap-8">
                            <Loader2 className="w-20 h-20 text-blue-600 animate-spin" />
-                           <p className="font-black text-blue-600 uppercase tracking-[0.3em] text-sm animate-pulse">Processando Documento...</p>
+                           <p className="font-black text-blue-600 uppercase tracking-[0.3em] text-sm animate-pulse">Lendo Documento...</p>
                         </div>
                       ) : (
                         <div className="py-16 flex flex-col items-center gap-8">
@@ -599,8 +521,8 @@ const Exams: React.FC<ExamsProps> = ({ exams, setExams, doctors, setDoctors, lab
                               {currentFileUri ? <CheckCircle2 className="w-10 h-10" /> : <Upload className="w-10 h-10" />}
                            </div>
                            <div className="space-y-2">
-                              <h4 className="text-2xl font-black text-slate-800 uppercase tracking-tighter">{currentFileUri ? 'Documento Carregado' : 'Digitalizar Laudo'}</h4>
-                              <p className="text-slate-400 text-xs font-bold uppercase tracking-widest">{currentFileUri ? 'Arquivo pronto para ser salvo com o exame' : 'Clique para subir PDF ou Foto'}</p>
+                              <h4 className="text-2xl font-black text-slate-800 uppercase tracking-tighter">{currentFileUri ? 'Documento Pronto' : 'Carregar Laudo'}</h4>
+                              <p className="text-slate-400 text-xs font-bold uppercase tracking-widest">Suporta arquivos grandes (PDF/Imagens)</p>
                            </div>
                         </div>
                       )}
@@ -648,7 +570,7 @@ const Exams: React.FC<ExamsProps> = ({ exams, setExams, doctors, setDoctors, lab
            <div className="bg-white w-full max-w-4xl rounded-[48px] shadow-2xl overflow-hidden flex flex-col max-h-[90vh] animate-in slide-in-from-bottom-8 duration-500">
               <div className="p-8 border-b border-slate-100 flex items-center justify-between bg-blue-600 text-white">
                  <h3 className="text-xl font-black uppercase tracking-widest">Análise Detalhada</h3>
-                 <button onClick={() => { setViewingExamRecord(null); setIsEditingRecord(false); }} className="p-2 hover:bg-white/10 rounded-full transition-colors"><X className="w-8 h-8" /></button>
+                 <button onClick={() => setViewingExamRecord(null)} className="p-2 hover:bg-white/10 rounded-full transition-colors"><X className="w-8 h-8" /></button>
               </div>
               <div className="p-12 overflow-y-auto">
                  <div className="flex flex-col md:flex-row justify-between items-start gap-8 mb-12">
