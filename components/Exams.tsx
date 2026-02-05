@@ -20,40 +20,45 @@ export const getHealthStatus = (valueStr: string, referenceRange: string): Healt
   const cleanRange = referenceRange.replace(',', '.').toLowerCase();
 
   if (isNumericValue) {
+    // Caso 1: Faixa de valores (ex: 70 - 99)
     const rangeMatch = cleanRange.match(/([\d.]+)\s*(?:-|a|até|—)\s*([\d.]+)/);
     if (rangeMatch) {
       const min = parseFloat(rangeMatch[1]);
       const max = parseFloat(rangeMatch[2]);
+      const rangeWidth = max - min || 1; // Evita divisão por zero
+      const margin = rangeWidth * 0.2; // Margem de 20% conforme solicitado
       
       if (val >= min && val <= max) return 'success';
       
-      const rangeWidth = max - min;
-      const margin = rangeWidth * 0.2;
-      
+      // Margem de 20% para ambos os lados
       if ((val >= min - margin && val < min) || (val > max && val <= max + margin)) return 'warning';
       return 'danger';
     }
 
+    // Caso 2: "Maior que" (ex: > 100)
     const greaterMatch = cleanRange.match(/(?:>|acima de|superior a)\s*([\d.]+)/);
     if (greaterMatch) {
       const threshold = parseFloat(greaterMatch[1]);
+      const margin = threshold * 0.2;
       if (val > threshold) return 'success';
-      if (val <= threshold && val >= threshold * 0.8) return 'warning';
+      if (val <= threshold && val >= threshold - margin) return 'warning';
       return 'danger';
     }
 
+    // Caso 3: "Menor que" (ex: < 100)
     const lessMatch = cleanRange.match(/(?:<|abaixo de|inferior a|até)\s*([\d.]+)/);
     if (lessMatch) {
       const threshold = parseFloat(lessMatch[1]);
+      const margin = threshold * 0.2;
       if (val < threshold) return 'success';
-      if (val >= threshold && val <= threshold * 1.2) return 'warning';
+      if (val >= threshold && val <= threshold + margin) return 'warning';
       return 'danger';
     }
   } else {
     const v = valueStr.toLowerCase().trim();
     const healthyPatterns = ['não reagente', 'negativo', 'ausente', 'normal', 'não detectado'];
     const unhealthyPatterns = ['reagente', 'positivo', 'presente', 'alterado', 'detectado'];
-    const infoPatterns = ['indeterminado', 'repetir', 'aguardar'];
+    const infoPatterns = ['indeterminado', 'repetir', 'aguardar', 'inconclusivo'];
     
     if (healthyPatterns.some(p => v.includes(p))) return 'success';
     if (unhealthyPatterns.some(p => v.includes(p))) return 'danger';
@@ -380,7 +385,7 @@ const Exams: React.FC<ExamsProps> = ({ exams, setExams, doctors, setDoctors, lab
     warning: 'bg-amber-500', 
     danger: 'bg-rose-500', 
     neutral: 'bg-slate-300',
-    info: 'bg-indigo-500'
+    info: 'bg-indigo-500' // Novo status 'info' (Roxo)
   };
 
   const statusTextColors: Record<HealthStatus, string> = {
@@ -540,7 +545,7 @@ const Exams: React.FC<ExamsProps> = ({ exams, setExams, doctors, setDoctors, lab
                     <div className={`w-3 h-3 rounded-full ${statusColors[status]}`}></div>
                     <span className={`text-[10px] font-black uppercase tracking-[0.2em] ${statusTextColors[status]}`}>{statusLabels[status]}</span>
                  </div>
-                 {exam.fileUri && <FileSearch className="w-4 h-4 text-emerald-500" />}
+                 {exam.fileUri && <FileSearch className="w-4 h-4 text-emerald-500" title="Arquivo anexado" />}
                  <button className="text-blue-600 bg-blue-50 p-3 rounded-2xl hover:bg-blue-600 hover:text-white transition-all shadow-sm"><Eye className="w-5 h-5" /></button>
               </div>
             </div>
@@ -615,8 +620,8 @@ const Exams: React.FC<ExamsProps> = ({ exams, setExams, doctors, setDoctors, lab
                               {currentFileUri ? <CheckCircle2 className="w-10 h-10" /> : <Upload className="w-10 h-10" />}
                            </div>
                            <div className="space-y-2">
-                              <h4 className="text-2xl font-black text-slate-800 uppercase tracking-tighter">{currentFileUri ? 'Documento Pronto' : 'Digitalizar Laudo'}</h4>
-                              <p className="text-slate-400 text-xs font-bold uppercase tracking-widest">Clique para subir PDF ou Foto</p>
+                              <h4 className="text-2xl font-black text-slate-800 uppercase tracking-tighter">{currentFileUri ? 'Documento Carregado' : 'Digitalizar Laudo'}</h4>
+                              <p className="text-slate-400 text-xs font-bold uppercase tracking-widest">{currentFileUri ? 'Arquivo pronto para salvar' : 'Clique para subir PDF ou Foto'}</p>
                            </div>
                         </div>
                       )}
@@ -648,7 +653,9 @@ const Exams: React.FC<ExamsProps> = ({ exams, setExams, doctors, setDoctors, lab
                            <input className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl outline-none font-black uppercase text-xs" value={newExam.laboratory} onChange={e => setNewExam({...newExam, laboratory: e.target.value.toUpperCase()})} placeholder="LABORATÓRIO" />
                         </div>
                     </div>
-                    <button type="submit" className="w-full bg-blue-600 text-white font-black py-6 rounded-[32px] shadow-2xl flex items-center justify-center gap-4 uppercase tracking-[0.2em] hover:bg-blue-700 transition-all text-sm"><Save className="w-7 h-7" /> Salvar no Histórico</button>
+                    <button type="submit" className="w-full bg-blue-600 text-white font-black py-6 rounded-[32px] shadow-2xl flex items-center justify-center gap-4 uppercase tracking-[0.2em] hover:bg-blue-700 transition-all text-sm">
+                      <Save className="w-7 h-7" /> {currentFileUri ? 'Salvar com Anexo' : 'Salvar no Histórico'}
+                    </button>
                   </form>
                 </div>
               )}
