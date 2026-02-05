@@ -44,6 +44,8 @@ export interface ExamRecord {
   doctorName: string;
   date: string;
   notes?: string;
+  fileUri?: string;
+  fileMimeType?: string;
 }
 
 export interface ImagingExam {
@@ -73,7 +75,6 @@ export interface Appointment {
   notified: boolean;
 }
 
-// Fixed missing Reminder interface to support the Reminders component
 export interface Reminder {
   id: string;
   examName: string;

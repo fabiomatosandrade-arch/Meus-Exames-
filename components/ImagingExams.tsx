@@ -65,6 +65,19 @@ const ImagingExams: React.FC<ImagingExamsProps> = ({
     return Array.from(new Set(docs)).sort();
   }, [imagingExams]);
 
+  // Sugestões para Autocompletar
+  const doctorSuggestions = useMemo(() => {
+    const fromList = doctors.map(d => d.name.toUpperCase().trim());
+    const fromExams = imagingExams.map(e => e.doctorName.toUpperCase().trim());
+    return Array.from(new Set([...fromList, ...fromExams])).filter(Boolean).sort();
+  }, [doctors, imagingExams]);
+
+  const laboratorySuggestions = useMemo(() => {
+    const fromList = laboratories.map(l => l.name.toUpperCase().trim());
+    const fromExams = imagingExams.map(e => e.laboratory.toUpperCase().trim());
+    return Array.from(new Set([...fromList, ...fromExams])).filter(Boolean).sort();
+  }, [laboratories, imagingExams]);
+
   // Sincroniza geração de ícones
   useEffect(() => {
     uniqueTypes.forEach(async (name) => {
@@ -523,7 +536,29 @@ const ImagingExams: React.FC<ImagingExamsProps> = ({
                       </div>
                       <div>
                         <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 block">Laboratório</label>
-                        <input required className="w-full p-4 bg-white border border-slate-200 rounded-2xl outline-none focus:ring-2 focus:ring-blue-500 font-black uppercase text-xs" value={newExam.laboratory} onChange={(e) => setNewExam({...newExam, laboratory: e.target.value.toUpperCase()})} />
+                        <input 
+                           required 
+                           list="lab-suggestions"
+                           className="w-full p-4 bg-white border border-slate-200 rounded-2xl outline-none focus:ring-2 focus:ring-blue-500 font-black uppercase text-xs" 
+                           value={newExam.laboratory} 
+                           onChange={(e) => setNewExam({...newExam, laboratory: e.target.value.toUpperCase()})} 
+                        />
+                        <datalist id="lab-suggestions">
+                          {laboratorySuggestions.map(lab => <option key={lab} value={lab} />)}
+                        </datalist>
+                      </div>
+                      <div className="col-span-2">
+                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 block">Médico Solicitante</label>
+                        <input 
+                           list="doc-suggestions"
+                           className="w-full p-4 bg-white border border-slate-200 rounded-2xl outline-none focus:ring-2 focus:ring-blue-500 font-black uppercase text-xs" 
+                           value={newExam.doctorName} 
+                           onChange={(e) => setNewExam({...newExam, doctorName: e.target.value.toUpperCase()})} 
+                           placeholder="NOME DO MÉDICO"
+                        />
+                        <datalist id="doc-suggestions">
+                           {doctorSuggestions.map(doc => <option key={doc} value={doc} />)}
+                        </datalist>
                       </div>
                    </div>
 
