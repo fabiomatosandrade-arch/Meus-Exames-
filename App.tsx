@@ -14,7 +14,7 @@ import Reports from './components/Reports';
 import Analytics from './components/Analytics';
 import Profile from './components/Profile';
 import Agenda from './components/Agenda';
-import { Microscope, Menu, X, User as UserIcon } from 'lucide-react';
+import { Microscope, Menu, X, User as UserIcon, AlertTriangle } from 'lucide-react';
 
 const App: React.FC = () => {
   const [currentScreen, setCurrentScreen] = useState<AppScreen>(AppScreen.LOGIN);
@@ -25,8 +25,8 @@ const App: React.FC = () => {
   const [laboratories, setLaboratories] = useState<Laboratory[]>([]);
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [storageError, setStorageError] = useState(false);
 
-  // Initialize data from local storage
   useEffect(() => {
     const savedUser = localStorage.getItem('lifeTrace_user');
     const savedExams = localStorage.getItem('lifeTrace_exams');
@@ -46,25 +46,20 @@ const App: React.FC = () => {
     if (savedAppointments) setAppointments(JSON.parse(savedAppointments));
   }, []);
 
+  // Persistência com tratamento de erro de cota (Arquivos grandes)
   useEffect(() => {
-    localStorage.setItem('lifeTrace_exams', JSON.stringify(exams));
-  }, [exams]);
-
-  useEffect(() => {
-    localStorage.setItem('lifeTrace_imagingExams', JSON.stringify(imagingExams));
-  }, [imagingExams]);
-
-  useEffect(() => {
-    localStorage.setItem('lifeTrace_doctors', JSON.stringify(doctors));
-  }, [doctors]);
-
-  useEffect(() => {
-    localStorage.setItem('lifeTrace_laboratories', JSON.stringify(laboratories));
-  }, [laboratories]);
-
-  useEffect(() => {
-    localStorage.setItem('lifeTrace_appointments', JSON.stringify(appointments));
-  }, [appointments]);
+    try {
+      localStorage.setItem('lifeTrace_exams', JSON.stringify(exams));
+      localStorage.setItem('lifeTrace_imagingExams', JSON.stringify(imagingExams));
+      localStorage.setItem('lifeTrace_doctors', JSON.stringify(doctors));
+      localStorage.setItem('lifeTrace_laboratories', JSON.stringify(laboratories));
+      localStorage.setItem('lifeTrace_appointments', JSON.stringify(appointments));
+      setStorageError(false);
+    } catch (e) {
+      console.error("Erro de armazenamento:", e);
+      setStorageError(true);
+    }
+  }, [exams, imagingExams, doctors, laboratories, appointments]);
 
   const handleLogout = () => {
     localStorage.removeItem('lifeTrace_user');
@@ -104,23 +99,15 @@ const App: React.FC = () => {
     user: currentUser
   };
 
-  const screenTitles: Record<AppScreen, string> = {
-    [AppScreen.DASHBOARD]: 'Painel de Controle',
-    [AppScreen.EXAMS]: 'Meus Exames',
-    [AppScreen.IMAGING_EXAMS]: 'Exames de Imagem',
-    [AppScreen.DOCTORS]: 'Meus Médicos',
-    [AppScreen.LABORATORIES]: 'Meus Laboratórios',
-    [AppScreen.ANALYTICS]: 'Análise Evolutiva',
-    [AppScreen.REPORTS]: 'Relatórios',
-    [AppScreen.PROFILE]: 'Meu Cadastro',
-    [AppScreen.AGENDA]: 'Agenda de Saúde',
-    [AppScreen.LOGIN]: '',
-    [AppScreen.REGISTER]: '',
-    [AppScreen.FORGOT_PASSWORD]: ''
-  };
-
   return (
     <div className="flex flex-col min-h-screen bg-slate-50">
+      {storageError && (
+        <div className="bg-rose-600 text-white px-4 py-2 flex items-center justify-center gap-2 text-xs font-bold uppercase tracking-widest z-50 print:hidden">
+          <AlertTriangle className="w-4 h-4" />
+          Erro: Limite de memória atingido. Remova arquivos grandes para salvar novos dados.
+        </div>
+      )}
+      
       <header className="bg-blue-600 text-white shadow-lg z-30 sticky top-0 print:hidden">
         <div className="px-4 py-3 md:px-8 flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -173,9 +160,6 @@ const App: React.FC = () => {
 
         <main className="flex-1 p-4 md:p-8 overflow-y-auto">
           <div className="max-w-7xl mx-auto">
-            <div className="mb-6 md:mb-8 md:hidden print:hidden">
-              <h2 className="text-2xl font-bold text-slate-800 uppercase tracking-tight">{screenTitles[currentScreen]}</h2>
-            </div>
             {currentScreen === AppScreen.DASHBOARD && <Dashboard {...commonProps} />}
             {currentScreen === AppScreen.EXAMS && <Exams {...commonProps} />}
             {currentScreen === AppScreen.IMAGING_EXAMS && <ImagingExams {...commonProps} />}

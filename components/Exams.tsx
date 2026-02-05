@@ -25,12 +25,12 @@ export const getHealthStatus = (valueStr: string, referenceRange: string): Healt
     if (rangeMatch) {
       const min = parseFloat(rangeMatch[1]);
       const max = parseFloat(rangeMatch[2]);
-      const rangeWidth = max - min || 1; // Evita divisão por zero
-      const margin = rangeWidth * 0.2; // Margem de 20% conforme solicitado
+      const rangeWidth = max - min || 1; 
+      const margin = rangeWidth * 0.2; // EXATAMENTE 20% de margem
       
       if (val >= min && val <= max) return 'success';
       
-      // Margem de 20% para ambos os lados
+      // Margem AMARELA (warning) de 20% para fora dos limites
       if ((val >= min - margin && val < min) || (val > max && val <= max + margin)) return 'warning';
       return 'danger';
     }
@@ -39,7 +39,7 @@ export const getHealthStatus = (valueStr: string, referenceRange: string): Healt
     const greaterMatch = cleanRange.match(/(?:>|acima de|superior a)\s*([\d.]+)/);
     if (greaterMatch) {
       const threshold = parseFloat(greaterMatch[1]);
-      const margin = threshold * 0.2;
+      const margin = threshold * 0.2; 
       if (val > threshold) return 'success';
       if (val <= threshold && val >= threshold - margin) return 'warning';
       return 'danger';
@@ -49,7 +49,7 @@ export const getHealthStatus = (valueStr: string, referenceRange: string): Healt
     const lessMatch = cleanRange.match(/(?:<|abaixo de|inferior a|até)\s*([\d.]+)/);
     if (lessMatch) {
       const threshold = parseFloat(lessMatch[1]);
-      const margin = threshold * 0.2;
+      const margin = threshold * 0.2; 
       if (val < threshold) return 'success';
       if (val >= threshold && val <= threshold + margin) return 'warning';
       return 'danger';
@@ -58,7 +58,7 @@ export const getHealthStatus = (valueStr: string, referenceRange: string): Healt
     const v = valueStr.toLowerCase().trim();
     const healthyPatterns = ['não reagente', 'negativo', 'ausente', 'normal', 'não detectado'];
     const unhealthyPatterns = ['reagente', 'positivo', 'presente', 'alterado', 'detectado'];
-    const infoPatterns = ['indeterminado', 'repetir', 'aguardar', 'inconclusivo'];
+    const infoPatterns = ['indeterminado', 'repetir', 'aguardar', 'inconclusivo', 'análise'];
     
     if (healthyPatterns.some(p => v.includes(p))) return 'success';
     if (unhealthyPatterns.some(p => v.includes(p))) return 'danger';
@@ -191,17 +191,6 @@ const Exams: React.FC<ExamsProps> = ({ exams, setExams, doctors, setDoctors, lab
     }
   };
 
-  const handleSaveEdit = () => {
-    if (editFormData.id && editFormData.examName && editFormData.value) {
-      const updatedExams = exams.map(exam => 
-        exam.id === editFormData.id ? { ...exam, ...editFormData } as ExamRecord : exam
-      );
-      setExams(updatedExams);
-      setViewingExamRecord({ ...viewingExamRecord, ...editFormData } as ExamRecord);
-      setIsEditingRecord(false);
-    }
-  };
-
   const registerDoctorIfNew = (doctorName: string) => {
     if (!doctorName || doctorName.toLowerCase() === 'não informado') return;
     const normalized = doctorName.toUpperCase().trim();
@@ -258,6 +247,11 @@ const Exams: React.FC<ExamsProps> = ({ exams, setExams, doctors, setDoctors, lab
     const file = e.target.files?.[0];
     if (!file) return;
 
+    // Alerta sobre tamanho de arquivo (Base64 ocupa 33% mais espaço)
+    if (file.size > 2 * 1024 * 1024) {
+      alert("Arquivo muito grande. Utilize arquivos com menos de 2MB para garantir o salvamento correto.");
+    }
+
     setIsAnalyzingFile(true);
     try {
       const reader = new FileReader();
@@ -287,12 +281,16 @@ const Exams: React.FC<ExamsProps> = ({ exams, setExams, doctors, setDoctors, lab
       };
       reader.readAsDataURL(file);
     } catch (error) {
-      console.error("Error processing file:", error);
+      console.error("Erro ao processar arquivo:", error);
       setIsAnalyzingFile(false);
     }
   };
 
   const handleSaveExtracted = () => {
+    if (!currentFileUri) {
+      if (!confirm("O documento ainda não foi processado completamente. Deseja salvar sem o anexo?")) return;
+    }
+
     const validExams = extractedExams
       .filter(ex => ex.examName && ex.value)
       .map(ex => {
@@ -311,7 +309,7 @@ const Exams: React.FC<ExamsProps> = ({ exams, setExams, doctors, setDoctors, lab
           doctorName: docName,
           date: ex.date || new Date().toISOString().split('T')[0],
           notes: (ex.notes || '').toUpperCase(),
-          fileUri: currentFileUri,
+          fileUri: currentFileUri, // Garante que o arquivo carregado seja vinculado
           fileMimeType: currentFileMime
         } as ExamRecord;
       });
@@ -327,17 +325,6 @@ const Exams: React.FC<ExamsProps> = ({ exams, setExams, doctors, setDoctors, lab
     const updated = [...extractedExams];
     updated[idx] = { ...updated[idx], [field]: val };
     setExtractedExams(updated);
-  };
-
-  const selectSigtapExam = async (ref: ExamReference) => {
-    setNewExam({
-      ...newExam,
-      examName: ref.name.toUpperCase(),
-      referenceRange: ref.referenceValue.toUpperCase(),
-      unit: ref.unit.toUpperCase() 
-    });
-    setSigtapResults([]);
-    setSearchQuery('');
   };
 
   const handleSaveExam = (e: React.FormEvent) => {
@@ -372,20 +359,12 @@ const Exams: React.FC<ExamsProps> = ({ exams, setExams, doctors, setDoctors, lab
     }
   };
 
-  const handleSigtapSearch = async () => {
-    if (!searchQuery.trim()) return;
-    setIsLoadingSigtap(true);
-    const results = await fetchSigtapReference(searchQuery);
-    setSigtapResults(results);
-    setIsLoadingSigtap(false);
-  };
-
   const statusColors: Record<HealthStatus, string> = {
     success: 'bg-emerald-500', 
     warning: 'bg-amber-500', 
     danger: 'bg-rose-500', 
     neutral: 'bg-slate-300',
-    info: 'bg-indigo-500' // Novo status 'info' (Roxo)
+    info: 'bg-purple-600' // Novo status ROXO
   };
 
   const statusTextColors: Record<HealthStatus, string> = {
@@ -393,7 +372,7 @@ const Exams: React.FC<ExamsProps> = ({ exams, setExams, doctors, setDoctors, lab
     warning: 'text-amber-600', 
     danger: 'text-rose-600', 
     neutral: 'text-slate-500',
-    info: 'text-indigo-600'
+    info: 'text-purple-600'
   };
 
   const statsCount = useMemo(() => {
@@ -458,9 +437,9 @@ const Exams: React.FC<ExamsProps> = ({ exams, setExams, doctors, setDoctors, lab
             </div>
             <div className="relative z-10"><span className="text-[11px] font-black uppercase tracking-widest block mb-1">Críticos</span></div>
          </button>
-         <button onClick={() => setStatusFilter('info')} className={`p-5 rounded-[32px] border transition-all text-left flex flex-col justify-between h-32 relative overflow-hidden group ${statusFilter === 'info' ? 'bg-indigo-600 border-indigo-700 text-white shadow-xl ring-4 ring-indigo-100 ring-offset-2' : 'bg-white border-slate-100 text-slate-600 hover:border-indigo-200 shadow-sm'}`}>
+         <button onClick={() => setStatusFilter('info')} className={`p-5 rounded-[32px] border transition-all text-left flex flex-col justify-between h-32 relative overflow-hidden group ${statusFilter === 'info' ? 'bg-purple-600 border-purple-700 text-white shadow-xl ring-4 ring-purple-100 ring-offset-2' : 'bg-white border-slate-100 text-slate-600 hover:border-purple-200 shadow-sm'}`}>
             <div className="flex items-center justify-between relative z-10">
-              <Info className={`w-6 h-6 ${statusFilter === 'info' ? 'text-white' : 'text-indigo-500'}`} />
+              <Info className={`w-6 h-6 ${statusFilter === 'info' ? 'text-white' : 'text-purple-500'}`} />
               <span className="text-3xl font-black tabular-nums">{statsCount.info}</span>
             </div>
             <div className="relative z-10"><span className="text-[11px] font-black uppercase tracking-widest block mb-1">Info</span></div>
@@ -545,7 +524,7 @@ const Exams: React.FC<ExamsProps> = ({ exams, setExams, doctors, setDoctors, lab
                     <div className={`w-3 h-3 rounded-full ${statusColors[status]}`}></div>
                     <span className={`text-[10px] font-black uppercase tracking-[0.2em] ${statusTextColors[status]}`}>{statusLabels[status]}</span>
                  </div>
-                 {exam.fileUri && <FileSearch className="w-4 h-4 text-emerald-500" title="Arquivo anexado" />}
+                 {exam.fileUri && <FileSearch className="w-4 h-4 text-emerald-500 animate-pulse" title="Arquivo anexado" />}
                  <button className="text-blue-600 bg-blue-50 p-3 rounded-2xl hover:bg-blue-600 hover:text-white transition-all shadow-sm"><Eye className="w-5 h-5" /></button>
               </div>
             </div>
@@ -621,7 +600,7 @@ const Exams: React.FC<ExamsProps> = ({ exams, setExams, doctors, setDoctors, lab
                            </div>
                            <div className="space-y-2">
                               <h4 className="text-2xl font-black text-slate-800 uppercase tracking-tighter">{currentFileUri ? 'Documento Carregado' : 'Digitalizar Laudo'}</h4>
-                              <p className="text-slate-400 text-xs font-bold uppercase tracking-widest">{currentFileUri ? 'Arquivo pronto para salvar' : 'Clique para subir PDF ou Foto'}</p>
+                              <p className="text-slate-400 text-xs font-bold uppercase tracking-widest">{currentFileUri ? 'Arquivo pronto para ser salvo com o exame' : 'Clique para subir PDF ou Foto'}</p>
                            </div>
                         </div>
                       )}
